@@ -299,6 +299,98 @@ window.addEventListener('error',function(e){console.log('JS Error:',e.message)})
 </style>
 
 
+
+// ===== منع الإرسال المكرر + حفظ PDF =====
+window.__reportSending = false;
+window.__lastReportId = null;
+
+var originalSend = window.sendReportUniversal;
+window.sendReportUniversal = function(payload, pdfDataUrl, pdfName) {
+  // منع التكرار
+  if(window.__reportSending) {
+    console.warn("Already sending, blocked duplicate");
+    return;
+  }
+  if(payload && payload.reportNo && window.__lastReportId === payload.reportNo) {
+    console.warn("Duplicate report ID blocked: " + payload.reportNo);
+    return;
+  }
+  
+  window.__reportSending = true;
+  window.__lastReportId = payload ? payload.reportNo : null;
+  
+  var SCRIPT_URL = window.SUPERVISION_SCRIPT_URL;
+  try {
+    var pdfToSend = null;
+    if(pdfDataUrl && pdfDataUrl.length < 8388608) {
+      pdfToSend = {name: pdfName, dataUrl: pdfDataUrl};
+    }
+    payload.pdf = pdfToSend;
+    var jsonStr = JSON.stringify(payload);
+    
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", SCRIPT_URL, true);
+    xhr.setRequestHeader("Content-Type","text/plain;charset=utf-8");
+    xhr.onreadystatechange = function(){
+      if(xhr.readyState === 4){
+        window.__reportSending = false;
+        console.log("✅ Sent once, status:", xhr.status);
+      }
+    };
+    xhr.onerror = function(){ window.__reportSending = false; };
+    xhr.send(jsonStr);
+    
+    // إلغاء قفل الإرسال بعد 10 ثواني كحد أقصى
+    setTimeout(function(){ window.__reportSending = false; }, 10000);
+    
+  } catch(e){
+    window.__reportSending = false;
+    console.error("Send failed", e);
+  }
+};
+
+<script>
+// ===== إصلاح رقم التقرير والتاريخ أوتوماتيك =====
+window.genReportNo = function(){
+  var d = new Date();
+  var pad = function(n){ return n<10 ? '0'+n : ''+n; };
+  var yyyy = d.getFullYear();
+  var MM = pad(d.getMonth()+1);
+  var dd = pad(d.getDate());
+  var HH = pad(d.getHours());
+  var mm = pad(d.getMinutes());
+  var ss = pad(d.getSeconds());
+  var rand = Math.floor(Math.random()*90+10); // رقمين عشوائيين لمنع التكرار
+  return "EG-RPT-" + yyyy + MM + dd + "-" + HH + mm + ss + "-" + rand;
+};
+window.getAutoDate = function(){
+  try{
+    var d = new Date();
+    // تاريخ أوتوماتيك بتوقيت القاهرة
+    var dateStr = d.toLocaleDateString('ar-EG', {timeZone:'Africa/Cairo', year:'numeric', month:'2-digit', day:'2-digit'});
+    var timeStr = d.toLocaleTimeString('ar-EG', {timeZone:'Africa/Cairo', hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    return dateStr + " " + timeStr;
+  }catch(e){
+    return new Date().toLocaleString('ar-EG');
+  }
+};
+// تحديث K تلقائياً عند الإرسال
+(function(){
+  var originalInterval = setInterval(function(){
+    try{
+      if(window.K){
+        // لا نحدث رقم التقرير باستمرار، فقط عند الإرسال
+        // لكن نحدث التاريخ كل دقيقة
+        if(!window.__lastAutoDateUpdate || Date.now() - window.__lastAutoDateUpdate > 60000){
+          window.K.date = window.getAutoDate();
+          window.__lastAutoDateUpdate = Date.now();
+        }
+      }
+    }catch(e){}
+  }, 1000);
+})();
+console.log("✅ Auto ReportNo & Date Fix Loaded");
+</script>
 </head>
 <body>
   <div id="root" style="min-height:100vh;display:grid;place-items:center;font-family:Cairo,system-ui;font-weight:800;color:#0f766e;background:#F8FAFC">جاري تحميل أداة الإشراف...<br><small style="font-size:11px;color:#64748b;margin-top:8px">المصرية جروب</small></div>
@@ -333,7 +425,10 @@ Error generating stack: `+u.message+`
     img.src=N.result;
   };
   N.readAsDataURL(g)
-},epDel=(S,g)=>{i((L)=>L.map((J)=>J.id===S?{...J,photos:(J.photos||[]).filter((z)=>z.id!==g)}:J))},He=(S,g)=>{i((N)=>N.map((O)=>{if(O.id!==S)return O;let L=parseInt(g),J=!g||isNaN(L)||L<=0;return{...O,qty:g,status:J?null:O.status}}))},Dt=(S,g)=>{i((N)=>N.map((O)=>O.id===S?{...O,status:g}:O))},Ht=(S,g)=>{i((N)=>N.map((O)=>O.id===S?{...O,note:g}:O))},Ic=async()=>{let S=(g)=>new Promise((N,O)=>{if(document.querySelector(`script[src="${g}"]`)){N();return}let L=document.createElement("script");L.src=g,L.onload=()=>N(),L.onerror=()=>O(Error(`Failed ${g}`)),document.head.appendChild(L)});if(!window.html2canvas)await S("https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js");if(!window.jspdf)await S("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js")},$c=async()=>{y(!0),E(5);let S={};try{if(await Ic(),E(15),document.fonts)await document.fonts.ready;await new Promise((Pe)=>setTimeout(Pe,400)),E(25);let g=document.getElementById("report-container");if(!g)throw Error("report-container not found");S={position:g.style.position,left:g.style.left,top:g.style.top,transform:g.style.transform,opacity:g.style.opacity,zIndex:g.style.zIndex,width:g.style.width,pointerEvents:g.style.pointerEvents},g.style.position="relative",g.style.left="0",g.style.top="0",g.style.transform="none",g.style.opacity="1",g.style.zIndex="9999",g.style.width="800px",g.style.pointerEvents="none",g.style.background="#F8FAFC",g.style.visibility="visible",g.style.display="block",document.body.style.overflow="visible",await new Promise((Pe)=>setTimeout(Pe,300));let N=g.querySelectorAll("img");await Promise.all(Array.from(N).map((Pe)=>{if(Pe.complete&&Pe.naturalHeight!==0)return Promise.resolve();return new Promise((wu)=>{let Yi=setTimeout(()=>wu(null),2500);Pe.onload=()=>{clearTimeout(Yi),wu(null)},Pe.onerror=()=>{clearTimeout(Yi),wu(null)}})})),E(45);let O=await window.html2canvas(g,{scale:(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)?1:2),useCORS:!0,backgroundColor:"#F8FAFC",scrollY:-window.scrollY,windowWidth:g.scrollWidth,windowHeight:g.scrollHeight,logging:!1,allowTaint:!1,imageTimeout:15000});E(70);let L=O.toDataURL("image/png"),J=window.jspdf,M=new(J.jsPDF||J)("p","mm","a4"),Vt=M.internal.pageSize.getWidth(),Yr=M.internal.pageSize.getHeight(),yu=Vt,Bt=O.height*yu/O.width,Xr=Bt,gu=0;M.addImage(L,"PNG",0,gu,yu,Bt),Xr-=Yr;while(Xr>0)gu=Xr-Bt,M.addPage(),M.addImage(L,"PNG",0,gu,yu,Bt),Xr-=Yr;E(85);E(95);let xc=`${K.reportNo}_V20_Full.pdf`;try{
+},epDel=(S,g)=>{i((L)=>L.map((J)=>J.id===S?{...J,photos:(J.photos||[]).filter((z)=>z.id!==g)}:J))},He=(S,g)=>{i((N)=>N.map((O)=>{if(O.id!==S)return O;let L=parseInt(g),J=!g||isNaN(L)||L<=0;return{...O,qty:g,status:J?null:O.status}}))},Dt=(S,g)=>{i((N)=>N.map((O)=>O.id===S?{...O,status:g}:O))},Ht=(S,g)=>{i((N)=>N.map((O)=>O.id===S?{...O,note:g}:O))},Ic=async()=>{let S=(g)=>new Promise((N,O)=>{if(document.querySelector(`script[src="${g}"]`)){N();return}let L=document.createElement("script");L.src=g,L.onload=()=>N(),L.onerror=()=>O(Error(`Failed ${g}`)),document.head.appendChild(L)});if(!window.html2canvas)await S("https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js");if(!window.jspdf)await S("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js")},$c=async()=>{y(!0),E(5);let S={};try{if(await Ic(),E(15),document.fonts)await document.fonts.ready;await new Promise((Pe)=>setTimeout(Pe,400)),E(25);let g=document.getElementById("report-container");if(!g)throw Error("report-container not found");S={position:g.style.position,left:g.style.left,top:g.style.top,transform:g.style.transform,opacity:g.style.opacity,zIndex:g.style.zIndex,width:g.style.width,pointerEvents:g.style.pointerEvents},g.style.position="relative",g.style.left="0",g.style.top="0",g.style.transform="none",g.style.opacity="1",g.style.zIndex="9999",g.style.width="800px",g.style.pointerEvents="none",g.style.background="#F8FAFC",g.style.visibility="visible",g.style.display="block",document.body.style.overflow="visible",await new Promise((Pe)=>setTimeout(Pe,300));let N=g.querySelectorAll("img");await Promise.all(Array.from(N).map((Pe)=>{if(Pe.complete&&Pe.naturalHeight!==0)return Promise.resolve();return new Promise((wu)=>{let Yi=setTimeout(()=>wu(null),2500);Pe.onload=()=>{clearTimeout(Yi),wu(null)},Pe.onerror=()=>{clearTimeout(Yi),wu(null)}})})),E(45);let O=await window.html2canvas(g,{scale:(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)?1:2),useCORS:!0,backgroundColor:"#F8FAFC",scrollY:-window.scrollY,windowWidth:g.scrollWidth,windowHeight:g.scrollHeight,logging:!1,allowTaint:!1,imageTimeout:15000});E(70);let L=O.toDataURL("image/png"),J=window.jspdf,M=new(J.jsPDF||J)("p","mm","a4"),Vt=M.internal.pageSize.getWidth(),Yr=M.internal.pageSize.getHeight(),yu=Vt,Bt=O.height*yu/O.width,Xr=Bt,gu=0;M.addImage(L,"PNG",0,gu,yu,Bt),Xr-=Yr;while(Xr>0)gu=Xr-Bt,M.addPage(),M.addImage(L,"PNG",0,gu,yu,Bt),Xr-=Yr;E(85);E(95);// ===== توليد رقم تقرير جديد بالتاريخ والدقيقة والثانية أوتوماتيك =====
+      K.reportNo = window.genReportNo();
+      K.date = window.getAutoDate();
+      let xc=`${K.reportNo}_V20_Full.pdf`; console.log("New ReportNo:", K.reportNo, "Date:", K.date);;try{
 try{
   M.save(xc);
   console.log("PDF saved:",xc);
