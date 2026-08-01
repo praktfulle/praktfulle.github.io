@@ -1,257 +1,74 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<!-- ===== UNIVERSAL CAMERA + UNIVERSAL SEND FIX - FINAL PROFESSIONAL ===== -->
 <script>
-
-// ===== كاميرا تشتغل على كل الموبايلات والمتصفحات القديمة والجديدة =====
-// بدون تغيير شكل index.html - نفس الشكل بالظبط
+// ===== إصلاح نهائي - رقم تقرير أوتوماتيك + تاريخ أوتوماتيك + منع تكرار + كاميرا شاملة =====
 (function(){
-  // كشف نوع المتصفح
+  // توليد رقم تقرير بتاريخ ودقيقة وثانية + عشوائي
+  window.genReportNo = function(){
+    var d = new Date();
+    var pad = function(n){ return n<10 ? '0'+n : ''+n; };
+    return "EG-RPT-" + d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate()) + "-" + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds()) + "-" + Math.floor(Math.random()*90+10);
+  };
+  window.getAutoDate = function(){
+    try{
+      return new Date().toLocaleString('ar-EG', {timeZone:'Africa/Cairo'});
+    }catch(e){ return new Date().toLocaleString('ar-EG'); }
+  };
+  
+  // كشف المتصفح للكاميرا
   var isOldAndroid = /Android [1-4]\./.test(navigator.userAgent);
-  var isOldIOS = /iPhone OS [1-9]_/.test(navigator.userAgent) || /iPhone OS 10_/.test(navigator.userAgent);
-  var isVeryOld = !window.FileReader || !window.CanvasRenderingContext2D;
-  var isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-  var isAndroid = /Android/.test(navigator.userAgent);
-  
-  console.log("Camera Fix - OldAndroid:", isOldAndroid, "OldIOS:", isOldIOS, "VeryOld:", isVeryOld, "iOS:", isIOS, "Android:", isAndroid);
-  
-  // إنشاء input كاميرا يشتغل على كل الأجهزة
   window.createUniversalCameraInput = function(onImageSelected){
     var input = document.createElement('input');
     input.type = 'file';
-    
-    // أهم إصلاح: حسب نوع الجهاز نحدد الـ accept
-    if(isVeryOld){
-      // متصفح قديم جداً - بدون capture
-      input.accept = 'image/*';
-    } else if(isIOS){
-      // iPhone - capture بيعلق في بعض الإصدارات، نستخدم صيغة متوافقة
-      input.accept = 'image/*';
-      input.setAttribute('capture', 'environment');
-      // لـ iOS 11+ نضيف كمان
-      if(!isOldIOS){
-        input.setAttribute('accept', 'image/*;capture=camera');
-      }
-    } else if(isAndroid){
-      if(isOldAndroid){
-        // أندرويد قديم - بدون capture لأنه بيعلق
-        input.accept = 'image/*';
-      } else {
-        // أندرويد حديث - كاميرا خلفية
-        input.accept = 'image/*';
-        input.setAttribute('capture', 'environment');
-      }
-    } else {
-      // ديسكتوب أو غير معروف
-      input.accept = 'image/*';
-    }
-    
+    input.accept = 'image/*';
+    if(!isOldAndroid){ input.setAttribute('capture','environment'); }
     input.style.display = 'none';
-    input.style.position = 'fixed';
-    input.style.top = '-1000px';
-    
     input.onchange = function(e){
       var file = e.target.files && e.target.files[0];
-      if(!file){
-        document.body.removeChild(input);
-        return;
-      }
-      
-      // فحص حجم الملف
-      if(file.size > 15*1024*1024){
-        alert('الصورة كبيرة جداً - الحد الأقصى 15 ميجا\nحاول تصوير بجودة أقل');
-        document.body.removeChild(input);
-        return;
-      }
-      
-      // قراءة الصورة بطريقة تشتغل على كل المتصفحات
-      if(window.FileReader){
-        var reader = new FileReader();
-        reader.onload = function(ev){
-          var dataUrl = ev.target.result;
-          
-          // ضغط الصورة بطريقة تشتغل حتى على المتصفحات القديمة
-          if(window.Image && document.createElement('canvas').getContext){
+      if(!file){ document.body.removeChild(input); return; }
+      if(file.size > 15*1024*1024){ alert('الصورة كبيرة جدا'); document.body.removeChild(input); return; }
+      var reader = new FileReader();
+      reader.onload = function(ev){
+        var dataUrl = ev.target.result;
+        if(window.Image && document.createElement('canvas').getContext){
+          var img = new Image();
+          img.onload = function(){
             try{
-              var img = new Image();
-              img.onload = function(){
-                try{
-                  var canvas = document.createElement('canvas');
-                  var maxW = 1024, maxH = 1024;
-                  var w = img.width, h = img.height;
-                  
-                  // حساب الحجم الجديد مع الحفاظ على النسبة
-                  if(w > maxW || h > maxH){
-                    if(w > h){
-                      h = Math.round(h * maxW / w);
-                      w = maxW;
-                    } else {
-                      w = Math.round(w * maxH / h);
-                      h = maxH;
-                    }
-                  }
-                  
-                  canvas.width = w;
-                  canvas.height = h;
-                  var ctx = canvas.getContext('2d');
-                  
-                  // خلفية بيضاء عشان الصور الشفافة
-                  ctx.fillStyle = '#FFFFFF';
-                  ctx.fillRect(0,0,w,h);
-                  ctx.drawImage(img, 0, 0, w, h);
-                  
-                  // جودة متوسطة عشان الحجم
-                  var compressed = canvas.toDataURL('image/jpeg', 0.6);
-                  onImageSelected(compressed, file.name);
-                  document.body.removeChild(input);
-                } catch(canvasErr){
-                  console.warn('Canvas compress failed, using original:', canvasErr);
-                  onImageSelected(dataUrl, file.name);
-                  document.body.removeChild(input);
-                }
-              };
-              img.onerror = function(){
-                console.warn('Image load failed, using original');
-                onImageSelected(dataUrl, file.name);
-                document.body.removeChild(input);
-              };
-              img.src = dataUrl;
-            } catch(err){
-              console.warn('Image processing failed:', err);
-              onImageSelected(dataUrl, file.name);
-              document.body.removeChild(input);
-            }
-          } else {
-            // متصفح قديم جداً بدون canvas
-            onImageSelected(dataUrl, file.name);
+              var canvas = document.createElement('canvas');
+              var maxW=1024, maxH=1024, w=img.width, h=img.height;
+              if(w>maxW||h>maxH){ if(w>h){ h=Math.round(h*maxW/w); w=maxW; } else { w=Math.round(w*maxH/h); h=maxH; } }
+              canvas.width=w; canvas.height=h;
+              var ctx=canvas.getContext('2d');
+              ctx.fillStyle='#FFF'; ctx.fillRect(0,0,w,h); ctx.drawImage(img,0,0,w,h);
+              var compressed=canvas.toDataURL('image/jpeg',0.6);
+              onImageSelected(compressed, file.name);
+            }catch(err){ onImageSelected(dataUrl, file.name); }
             document.body.removeChild(input);
-          }
-        };
-        reader.onerror = function(){
-          alert('فشل قراءة الصورة - حاول مرة أخرى');
-          document.body.removeChild(input);
-        };
-        reader.readAsDataURL(file);
-      } else {
-        // متصفح قديم جداً بدون FileReader
-        alert('المتصفح قديم جداً ولا يدعم الكاميرا - حدث المتصفح أو استخدم متصفح آخر');
-        document.body.removeChild(input);
-      }
+          };
+          img.onerror=function(){ onImageSelected(dataUrl, file.name); document.body.removeChild(input); };
+          img.src=dataUrl;
+        } else { onImageSelected(dataUrl, file.name); document.body.removeChild(input); }
+      };
+      reader.readAsDataURL(file);
     };
-    
     document.body.appendChild(input);
     return input;
   };
   
-  // دالة فتح الكاميرا المضمونة
-  window.openUniversalCamera = function(callback){
-    try{
-      var input = window.createUniversalCameraInput(callback);
-      // تأخير بسيط عشان بعض المتصفحات
-      setTimeout(function(){
-        input.click();
-      }, 100);
-    } catch(err){
-      console.error('Camera open failed:', err);
-      alert('فشل فتح الكاميرا: ' + err.message + '\nحاول من متصفح آخر');
-    }
+  // منع التكرار
+  window.__reportSending = false;
+  window.__lastReportId = null;
+  window.sendReportOnce = function(payload){
+    if(window.__reportSending){ console.warn("Blocked duplicate send"); return false; }
+    if(payload && payload.reportNo && window.__lastReportId === payload.reportNo){ console.warn("Blocked duplicate ID"); return false; }
+    window.__reportSending = true;
+    window.__lastReportId = payload.reportNo;
+    setTimeout(function(){ window.__reportSending = false; }, 15000);
+    return true;
   };
-  
-  // إصلاح تلقائي لكل أزرار الكاميرا الموجودة في الصفحة
-  window.fixAllCameraButtons = function(){
-    // ننتظر لحد ما React يحمل
-    var checkInterval = setInterval(function(){
-      var buttons = document.querySelectorAll('button');
-      var fixed = 0;
-      buttons.forEach(function(btn){
-        if(btn.textContent && (btn.textContent.includes('تصوير') || btn.textContent.includes('كاميرا'))){
-          if(!btn.dataset.cameraFixed){
-            btn.dataset.cameraFixed = 'true';
-            fixed++;
-            // نحفظ الـ onclick الأصلي
-            var originalOnClick = btn.onclick;
-            // نضيف تحسين للزر
-            btn.addEventListener('click', function(e){
-              // لو المتصفح قديم جداً، نمنع السلوك الافتراضي ونستخدم الكاميرا الشاملة
-              if(isOldAndroid || isVeryOld){
-                e.preventDefault();
-                e.stopPropagation();
-                console.log('Using universal camera for old browser');
-              }
-            }, true);
-          }
-        }
-      });
-      if(fixed > 0) console.log('Fixed ' + fixed + ' camera buttons');
-    }, 2000);
-    
-    // وقف الفحص بعد 30 ثانية
-    setTimeout(function(){ clearInterval(checkInterval); }, 30000);
-  };
-  
-  // شغل الإصلاح التلقائي
-  if(document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', window.fixAllCameraButtons);
-  } else {
-    window.fixAllCameraButtons();
-  }
-  
-  console.log('✅ Universal Camera Fix Loaded - Works on all browsers');
 })();
-
-// ===== إصلاح إضافي لـ FileReader و Canvas على المتصفحات القديمة =====
-(function(){
-  // Polyfill لـ FileReader لو مش موجود
-  if(!window.FileReader){
-    console.warn('FileReader not supported - camera will not work');
-  }
-  
-  // إصلاح مشكلة toDataURL في بعض المتصفحات القديمة
-  if(window.HTMLCanvasElement){
-    var originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
-    if(originalToDataURL){
-      HTMLCanvasElement.prototype.toDataURL = function(type, quality){
-        try{
-          return originalToDataURL.call(this, type, quality);
-        } catch(e){
-          // fallback بدون quality
-          return originalToDataURL.call(this, type);
-        }
-      };
-    }
-  }
-})();
-
-
-// ===== إصلاح إرسال شامل يشتغل على كل المتصفحات القديمة والجديدة =====
-window.sendReportUniversal = function(payload, pdfDataUrl, pdfName) {
-  var SCRIPT_URL = window.SUPERVISION_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbzZyWzvIFXRYPwpvXMDXi9bvLCV3ew0loTrAEhZKj6aRVAD60zZRv2o9EeNSW6MBmEm/exec";
-  try {
-    var pdfToSend = null;
-    if(pdfDataUrl && pdfDataUrl.length < 8388608) {
-      pdfToSend = {name: pdfName, dataUrl: pdfDataUrl};
-    } else if(pdfDataUrl) {
-      console.warn("PDF too large (" + (pdfDataUrl.length/1024/1024).toFixed(2) + "MB), sending without PDF");
-    }
-    payload.pdf = pdfToSend;
-    var jsonStr = JSON.stringify(payload);
-    // إرسال يشتغل على كل المتصفحات
-    if(window.fetch) {
-      fetch(SCRIPT_URL, {method:"POST", mode:"no-cors", headers:{"Content-Type":"text/plain;charset=utf-8"}, body:jsonStr})
-      .then(function(){console.log("✅ Sent via fetch");})
-      .catch(function(){ 
-        var xhr = new XMLHttpRequest(); xhr.open("POST", SCRIPT_URL, true);
-        xhr.setRequestHeader("Content-Type","text/plain;charset=utf-8"); xhr.send(jsonStr);
-      });
-    } else {
-      var xhr = new XMLHttpRequest(); xhr.open("POST", SCRIPT_URL, true);
-      xhr.setRequestHeader("Content-Type","text/plain;charset=utf-8"); xhr.send(jsonStr);
-    }
-  } catch(e){ console.error("Send failed", e); }
-};
 </script>
-<!-- ===== END UNIVERSAL FIX ===== -->
 
 
 
@@ -299,98 +116,6 @@ window.addEventListener('error',function(e){console.log('JS Error:',e.message)})
 </style>
 
 
-
-// ===== منع الإرسال المكرر + حفظ PDF =====
-window.__reportSending = false;
-window.__lastReportId = null;
-
-var originalSend = window.sendReportUniversal;
-window.sendReportUniversal = function(payload, pdfDataUrl, pdfName) {
-  // منع التكرار
-  if(window.__reportSending) {
-    console.warn("Already sending, blocked duplicate");
-    return;
-  }
-  if(payload && payload.reportNo && window.__lastReportId === payload.reportNo) {
-    console.warn("Duplicate report ID blocked: " + payload.reportNo);
-    return;
-  }
-  
-  window.__reportSending = true;
-  window.__lastReportId = payload ? payload.reportNo : null;
-  
-  var SCRIPT_URL = window.SUPERVISION_SCRIPT_URL;
-  try {
-    var pdfToSend = null;
-    if(pdfDataUrl && pdfDataUrl.length < 8388608) {
-      pdfToSend = {name: pdfName, dataUrl: pdfDataUrl};
-    }
-    payload.pdf = pdfToSend;
-    var jsonStr = JSON.stringify(payload);
-    
-    var xhr = new XMLHttpRequest();
-    xhr.open("POST", SCRIPT_URL, true);
-    xhr.setRequestHeader("Content-Type","text/plain;charset=utf-8");
-    xhr.onreadystatechange = function(){
-      if(xhr.readyState === 4){
-        window.__reportSending = false;
-        console.log("✅ Sent once, status:", xhr.status);
-      }
-    };
-    xhr.onerror = function(){ window.__reportSending = false; };
-    xhr.send(jsonStr);
-    
-    // إلغاء قفل الإرسال بعد 10 ثواني كحد أقصى
-    setTimeout(function(){ window.__reportSending = false; }, 10000);
-    
-  } catch(e){
-    window.__reportSending = false;
-    console.error("Send failed", e);
-  }
-};
-
-<script>
-// ===== إصلاح رقم التقرير والتاريخ أوتوماتيك =====
-window.genReportNo = function(){
-  var d = new Date();
-  var pad = function(n){ return n<10 ? '0'+n : ''+n; };
-  var yyyy = d.getFullYear();
-  var MM = pad(d.getMonth()+1);
-  var dd = pad(d.getDate());
-  var HH = pad(d.getHours());
-  var mm = pad(d.getMinutes());
-  var ss = pad(d.getSeconds());
-  var rand = Math.floor(Math.random()*90+10); // رقمين عشوائيين لمنع التكرار
-  return "EG-RPT-" + yyyy + MM + dd + "-" + HH + mm + ss + "-" + rand;
-};
-window.getAutoDate = function(){
-  try{
-    var d = new Date();
-    // تاريخ أوتوماتيك بتوقيت القاهرة
-    var dateStr = d.toLocaleDateString('ar-EG', {timeZone:'Africa/Cairo', year:'numeric', month:'2-digit', day:'2-digit'});
-    var timeStr = d.toLocaleTimeString('ar-EG', {timeZone:'Africa/Cairo', hour:'2-digit', minute:'2-digit', second:'2-digit'});
-    return dateStr + " " + timeStr;
-  }catch(e){
-    return new Date().toLocaleString('ar-EG');
-  }
-};
-// تحديث K تلقائياً عند الإرسال
-(function(){
-  var originalInterval = setInterval(function(){
-    try{
-      if(window.K){
-        // لا نحدث رقم التقرير باستمرار، فقط عند الإرسال
-        // لكن نحدث التاريخ كل دقيقة
-        if(!window.__lastAutoDateUpdate || Date.now() - window.__lastAutoDateUpdate > 60000){
-          window.K.date = window.getAutoDate();
-          window.__lastAutoDateUpdate = Date.now();
-        }
-      }
-    }catch(e){}
-  }, 1000);
-})();
-console.log("✅ Auto ReportNo & Date Fix Loaded");
-</script>
 </head>
 <body>
   <div id="root" style="min-height:100vh;display:grid;place-items:center;font-family:Cairo,system-ui;font-weight:800;color:#0f766e;background:#F8FAFC">جاري تحميل أداة الإشراف...<br><small style="font-size:11px;color:#64748b;margin-top:8px">المصرية جروب</small></div>
@@ -425,10 +150,7 @@ Error generating stack: `+u.message+`
     img.src=N.result;
   };
   N.readAsDataURL(g)
-},epDel=(S,g)=>{i((L)=>L.map((J)=>J.id===S?{...J,photos:(J.photos||[]).filter((z)=>z.id!==g)}:J))},He=(S,g)=>{i((N)=>N.map((O)=>{if(O.id!==S)return O;let L=parseInt(g),J=!g||isNaN(L)||L<=0;return{...O,qty:g,status:J?null:O.status}}))},Dt=(S,g)=>{i((N)=>N.map((O)=>O.id===S?{...O,status:g}:O))},Ht=(S,g)=>{i((N)=>N.map((O)=>O.id===S?{...O,note:g}:O))},Ic=async()=>{let S=(g)=>new Promise((N,O)=>{if(document.querySelector(`script[src="${g}"]`)){N();return}let L=document.createElement("script");L.src=g,L.onload=()=>N(),L.onerror=()=>O(Error(`Failed ${g}`)),document.head.appendChild(L)});if(!window.html2canvas)await S("https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js");if(!window.jspdf)await S("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js")},$c=async()=>{y(!0),E(5);let S={};try{if(await Ic(),E(15),document.fonts)await document.fonts.ready;await new Promise((Pe)=>setTimeout(Pe,400)),E(25);let g=document.getElementById("report-container");if(!g)throw Error("report-container not found");S={position:g.style.position,left:g.style.left,top:g.style.top,transform:g.style.transform,opacity:g.style.opacity,zIndex:g.style.zIndex,width:g.style.width,pointerEvents:g.style.pointerEvents},g.style.position="relative",g.style.left="0",g.style.top="0",g.style.transform="none",g.style.opacity="1",g.style.zIndex="9999",g.style.width="800px",g.style.pointerEvents="none",g.style.background="#F8FAFC",g.style.visibility="visible",g.style.display="block",document.body.style.overflow="visible",await new Promise((Pe)=>setTimeout(Pe,300));let N=g.querySelectorAll("img");await Promise.all(Array.from(N).map((Pe)=>{if(Pe.complete&&Pe.naturalHeight!==0)return Promise.resolve();return new Promise((wu)=>{let Yi=setTimeout(()=>wu(null),2500);Pe.onload=()=>{clearTimeout(Yi),wu(null)},Pe.onerror=()=>{clearTimeout(Yi),wu(null)}})})),E(45);let O=await window.html2canvas(g,{scale:(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)?1:2),useCORS:!0,backgroundColor:"#F8FAFC",scrollY:-window.scrollY,windowWidth:g.scrollWidth,windowHeight:g.scrollHeight,logging:!1,allowTaint:!1,imageTimeout:15000});E(70);let L=O.toDataURL("image/png"),J=window.jspdf,M=new(J.jsPDF||J)("p","mm","a4"),Vt=M.internal.pageSize.getWidth(),Yr=M.internal.pageSize.getHeight(),yu=Vt,Bt=O.height*yu/O.width,Xr=Bt,gu=0;M.addImage(L,"PNG",0,gu,yu,Bt),Xr-=Yr;while(Xr>0)gu=Xr-Bt,M.addPage(),M.addImage(L,"PNG",0,gu,yu,Bt),Xr-=Yr;E(85);E(95);// ===== توليد رقم تقرير جديد بالتاريخ والدقيقة والثانية أوتوماتيك =====
-      K.reportNo = window.genReportNo();
-      K.date = window.getAutoDate();
-      let xc=`${K.reportNo}_V20_Full.pdf`; console.log("New ReportNo:", K.reportNo, "Date:", K.date);;try{
+},epDel=(S,g)=>{i((L)=>L.map((J)=>J.id===S?{...J,photos:(J.photos||[]).filter((z)=>z.id!==g)}:J))},He=(S,g)=>{i((N)=>N.map((O)=>{if(O.id!==S)return O;let L=parseInt(g),J=!g||isNaN(L)||L<=0;return{...O,qty:g,status:J?null:O.status}}))},Dt=(S,g)=>{i((N)=>N.map((O)=>O.id===S?{...O,status:g}:O))},Ht=(S,g)=>{i((N)=>N.map((O)=>O.id===S?{...O,note:g}:O))},Ic=async()=>{let S=(g)=>new Promise((N,O)=>{if(document.querySelector(`script[src="${g}"]`)){N();return}let L=document.createElement("script");L.src=g,L.onload=()=>N(),L.onerror=()=>O(Error(`Failed ${g}`)),document.head.appendChild(L)});if(!window.html2canvas)await S("https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js");if(!window.jspdf)await S("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js")},$c=async()=>{y(!0),E(5);let S={};try{if(await Ic(),E(15),document.fonts)await document.fonts.ready;await new Promise((Pe)=>setTimeout(Pe,400)),E(25);let g=document.getElementById("report-container");if(!g)throw Error("report-container not found");S={position:g.style.position,left:g.style.left,top:g.style.top,transform:g.style.transform,opacity:g.style.opacity,zIndex:g.style.zIndex,width:g.style.width,pointerEvents:g.style.pointerEvents},g.style.position="relative",g.style.left="0",g.style.top="0",g.style.transform="none",g.style.opacity="1",g.style.zIndex="9999",g.style.width="800px",g.style.pointerEvents="none",g.style.background="#F8FAFC",g.style.visibility="visible",g.style.display="block",document.body.style.overflow="visible",await new Promise((Pe)=>setTimeout(Pe,300));let N=g.querySelectorAll("img");await Promise.all(Array.from(N).map((Pe)=>{if(Pe.complete&&Pe.naturalHeight!==0)return Promise.resolve();return new Promise((wu)=>{let Yi=setTimeout(()=>wu(null),2500);Pe.onload=()=>{clearTimeout(Yi),wu(null)},Pe.onerror=()=>{clearTimeout(Yi),wu(null)}})})),E(45);let O=await window.html2canvas(g,{scale:(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)?1:2),useCORS:!0,backgroundColor:"#F8FAFC",scrollY:-window.scrollY,windowWidth:g.scrollWidth,windowHeight:g.scrollHeight,logging:!1,allowTaint:!1,imageTimeout:15000});E(70);let L=O.toDataURL("image/png"),J=window.jspdf,M=new(J.jsPDF||J)("p","mm","a4"),Vt=M.internal.pageSize.getWidth(),Yr=M.internal.pageSize.getHeight(),yu=Vt,Bt=O.height*yu/O.width,Xr=Bt,gu=0;M.addImage(L,"PNG",0,gu,yu,Bt),Xr-=Yr;while(Xr>0)gu=Xr-Bt,M.addPage(),M.addImage(L,"PNG",0,gu,yu,Bt),Xr-=Yr;E(85);E(95);K.reportNo = window.genReportNo(); K.date = window.getAutoDate(); let xc=`${K.reportNo}_V20_Full.pdf`; console.log("Auto ReportNo:",K.reportNo,"Date:",K.date);;try{
 try{
   M.save(xc);
   console.log("PDF saved:",xc);
@@ -444,17 +166,12 @@ try{
     setTimeout(function(){URL.revokeObjectURL(url)}, 1000);
   }catch(e2){console.error("Blob save failed",e2)}
 }
-}catch(e){console.warn("Save failed",e)};try{var SCRIPT_URL="https://script.google.com/macros/s/AKfycbzZyWzvIFXRYPwpvXMDXi9bvLCV3ew0loTrAEhZKj6aRVAD60zZRv2o9EeNSW6MBmEm/exec",SEND_PDF=true,__sec={};Dc.forEach(function(sc){__sec[sc.id]=sc.title});var __ph=function(a){return(a||[]).map(function(p,k){return{name:"photo_"+(k+1)+".jpg",dataUrl:(typeof p==="string"?p:(p&&(p.src||p.dataUrl||p.url)||""))}}).filter(function(p){return p.dataUrl})},__pl={type:"supervision-visit",reportNo:K.reportNo,date:K.date,site:e,manager:t,gps:{lat:K.lat,lon:K.lon,accuracy:K.accuracy,city:K.city,gov:K.gov},checklist:l.map(function(it){return{section:__sec[it.group]||("قسم "+it.group),item:it.title,status:it.status,note:it.note,photos:__ph(it.photos)}}),equipment:o.map(function(q){return{ar:q.ar,en:q.en,qty:q.qty,present:parseInt(q.qty,10)>0,condition:q.status,note:q.note,photos:__ph(q.photos)}}),pdf:(function(){try{var d=M.output("datauristring"); if(d.length<8388608) return {name:xc,dataUrl:d}; else {console.warn("PDF too large, skipping"); return null;}}catch(e){return null;}})()};
+}catch(e){console.warn("Save failed",e)};try{var SCRIPT_URL="https://script.google.com/macros/s/AKfycbzZyWzvIFXRYPwpvXMDXi9bvLCV3ew0loTrAEhZKj6aRVAD60zZRv2o9EeNSW6MBmEm/exec",SEND_PDF=true,__sec={};Dc.forEach(function(sc){__sec[sc.id]=sc.title});var __ph=function(a){return(a||[]).map(function(p,k){return{name:"photo_"+(k+1)+".jpg",dataUrl:(typeof p==="string"?p:(p&&(p.src||p.dataUrl||p.url)||""))}}).filter(function(p){return p.dataUrl})},__pl={type:"supervision-visit",reportNo:K.reportNo,date:K.date,site:e,manager:t,gps:{lat:K.lat,lon:K.lon,accuracy:K.accuracy,city:K.city,gov:K.gov},checklist:l.map(function(it){return{section:__sec[it.group]||("قسم "+it.group),item:it.title,status:it.status,note:it.note,photos:__ph(it.photos)}}),equipment:o.map(function(q){return{ar:q.ar,en:q.en,qty:q.qty,present:parseInt(q.qty,10)>0,condition:q.status,note:q.note,photos:__ph(q.photos)}}),pdf:SEND_PDF?{name:xc,dataUrl:M.output("datauristring")}:null};
 try{
-  window.sendReportUniversal(__pl, (__pl.pdf && __pl.pdf.dataUrl) ? __pl.pdf.dataUrl : "", (__pl.pdf && __pl.pdf.name) ? __pl.pdf.name : "report.pdf").then(function(){console.log("Email request sent")}).catch(function(err){console.error("Email send error:",err)});
+  if(window.sendReportOnce(__pl)){ fetch(SCRIPT_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(__pl)}).then(function(){console.log("Sent once")}).catch(function(){ window.__reportSending=false; }) } else { console.log("Duplicate blocked") }.then(function(){console.log("Email request sent")}).catch(function(err){console.error("Email send error:",err)});
 }catch(__e){
   console.error("Fetch failed:",__e);
-  // Try alternative with form data
-  try{
-    var fd = new FormData();
-    fd.append("data", JSON.stringify(__pl)); console.log("Trying FormData fallback");
-    fetch(SCRIPT_URL,{method:"POST",mode:"no-cors",body:fd});
-  }catch(e2){console.error("FormData fallback failed",e2)}
+    // Fallback removed to prevent duplicate - single send only
 }
 }catch(__e){}let Hc=encodeURIComponent(`المصرية جروب لإدارة المشروعات - ${K.reportNo} - ${e}`),Wc=encodeURIComponent(`السلام عليكم،
 
